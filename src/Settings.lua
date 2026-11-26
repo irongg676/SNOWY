@@ -1,6 +1,6 @@
 -- SNOWY Settings module
 return {
-    Version = "2.5",
+    Version = "2.6",
     NotificationsEnabled = true,
     Width = 340,
     Height = 450,

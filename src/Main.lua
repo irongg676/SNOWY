@@ -1,8 +1,8 @@
 --[[
-    SNOWY ❄️ — Modular UI v2.4
+    SNOWY ❄️ — Steal a Brainrot Edition v2.6
     Entry module loaded by SNOWY.lua.
     Implements local session utilities and keeps experience-specific features disabled
-    unless they are built against an owned/authorized Roblox experience. Not tested in Delta.
+    for Steal a Brainrot. Game recognition uses the experience UniverseId; feature implementations are reported separately.
 ]]
 ---------------------------------------------------------------- Services
 local Players = game:GetService("Players")
@@ -447,41 +447,53 @@ end
 track(Players.PlayerAdded:Connect(refreshPlayers))
 track(Players.PlayerRemoving:Connect(function() task.defer(refreshPlayers) end))
 
--- Game-specific features use an explicit adapter contract. No fake toggles are shown.
-local adapterStatus = GameAdapter.getStatus(game.PlaceId)
-infoNote(pCarry,
-    "Auto Carry: " .. adapterStatus.message .. "\nهذه النسخة لا تتعرف تلقائياً على ميكانيكية الالتقاط في كل لعبة.", 1)
-infoNote(pExit,
-    "Auto Exit: غير متاح دون تكامل موثق للعبة يحدد نجاح الإيداع أو اكتمال المهمة. لن يغادر SNOWY السيرفر من تلقاء نفسه دون هذا التأكيد.", 1)
-infoNote(pEsp,
-    "Player ESP: غير مفعّل في الألعاب العامة. يمكن إضافة مؤشرات تشخيصية أو أدوات عرض ضمن تجربة تسمح بذلك عبر GameAdapter.", 1)
+-- Steal a Brainrot adapter: recognize the entire experience by UniverseId,
+-- including its sub-places. Recognition is not a claim that every game feature is implemented.
+local adapterStatus = GameAdapter.getStatus(game.PlaceId, game.GameId)
+local gameDetected = adapterStatus.supported == true
 
--- Visible, working controls: these report compatibility honestly instead of fake ON/OFF toggles.
-newButton(pCarry, "Check Carry Compatibility", function()
-    local status = GameAdapter.getStatus(game.PlaceId)
-    notify(status.supported and status.message or "Carry غير مدعوم لهذه اللعبة حالياً", not status.supported)
+infoNote(pCarry,
+    gameDetected
+        and "تم التعرف على Steal a Brainrot. نظام الالتقاط التلقائي لم يُفعّل بعد؛ هذه الحالة تؤكد توافق اللعبة فقط."
+        or adapterStatus.message,
+    1)
+infoNote(pExit,
+    gameDetected
+        and "تم التعرف على Steal a Brainrot. المغادرة التلقائية ستحتاج تأكيداً موثوقاً لنجاح إيداع Brainrot أولاً."
+        or adapterStatus.message,
+    1)
+infoNote(pEsp,
+    gameDetected
+        and "تم التعرف على Steal a Brainrot. عرض مؤشرات اللاعبين غير مفعّل في هذه النسخة بعد."
+        or adapterStatus.message,
+    1)
+
+-- Compatibility buttons report recognition of the target experience, not feature completion.
+newButton(pCarry, "Check Game Compatibility", function()
+    local status = GameAdapter.getStatus(game.PlaceId, game.GameId)
+    notify(status.supported and status.message or status.message, not status.supported)
 end, Theme.Purple).LayoutOrder = 2
 
-newButton(pCarry, "Copy Game ID", function()
-    copyToClipboard(game.PlaceId)
+newButton(pCarry, "Copy Game IDs", function()
+    copyToClipboard("Universe ID: " .. tostring(game.GameId) .. "\nPlace ID: " .. tostring(game.PlaceId))
 end).LayoutOrder = 3
 
-newButton(pExit, "Check Auto Exit Support", function()
-    local status = GameAdapter.getStatus(game.PlaceId)
-    if status.supported then
-        notify("التوافق متاح، لكن يلزم تحقق موثق من اكتمال المهمة قبل المغادرة")
-    else
-        notify("Auto Exit غير مدعوم لهذه اللعبة حالياً؛ لم يتم تأكيد إتمام أي مهمة", true)
-    end
+newButton(pExit, "Check Game Compatibility", function()
+    local status = GameAdapter.getStatus(game.PlaceId, game.GameId)
+    notify(status.supported and "اللعبة معروفة: Steal a Brainrot. تأكيد الإيداع التلقائي غير متاح بعد." or status.message, not status.supported)
 end, Theme.Purple).LayoutOrder = 2
 
-newButton(pExit, "Leave Server Now", function()
-    notify("المغادرة اليدوية غير متاحة من هذا الزر في هذه النسخة", true)
+newButton(pExit, "Copy Current Job ID", function()
+    if game.JobId == "" then
+        notify("Job ID غير متاح في هذه الجلسة", true)
+    else
+        copyToClipboard(game.JobId)
+    end
 end, Theme.Danger).LayoutOrder = 3
 
-newButton(pEsp, "Check ESP Compatibility", function()
-    local status = GameAdapter.getStatus(game.PlaceId)
-    notify(status.supported and status.message or "ESP غير مدعوم لهذه اللعبة حالياً", not status.supported)
+newButton(pEsp, "Check Game Compatibility", function()
+    local status = GameAdapter.getStatus(game.PlaceId, game.GameId)
+    notify(status.supported and "اللعبة معروفة: Steal a Brainrot. وظيفة ESP لم تُنفّذ بعد." or status.message, not status.supported)
 end, Theme.Purple).LayoutOrder = 2
 
 -- Settings (وظائف حقيقية)
