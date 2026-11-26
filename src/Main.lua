@@ -1,9 +1,8 @@
 --[[
-    SNOWY ❄️ — Modular UI v2.2
+    SNOWY ❄️ — Modular UI v2.4
     Entry module loaded by SNOWY.lua.
-    Server Finder / Value Finder / Auto Carry / Auto Exit / Player ESP remain UI-only
-    until implemented for an owned or authorized Roblox experience.
-    Not tested in Delta.
+    Implements local session utilities and keeps experience-specific features disabled
+    unless they are built against an owned/authorized Roblox experience. Not tested in Delta.
 ]]
 ---------------------------------------------------------------- Services
 local Players = game:GetService("Players")
@@ -27,11 +26,18 @@ end
 
 local Settings = loadRemoteModule("Settings")
 local Theme = loadRemoteModule("Theme")
+local GameAdapter = loadRemoteModule("GameAdapter")
 local UI = loadRemoteModule("UI")({
     Theme = Theme, UIS = UIS, TweenService = TweenService, LocalPlayer = LocalPlayer,
 })
 local gui = UI.gui
-local track = UI.track
+local uiTrack = UI.track
+local uiConnections = UI.connections or {}
+local connections = {}
+local function track(conn)
+    table.insert(connections, conn)
+    return uiTrack(conn)
+end
 local corner, stroke, gradient = UI.corner, UI.stroke, UI.gradient
 local addPress, softGradient = UI.addPress, UI.softGradient
 local label, clampPos, makeDraggable = UI.label, UI.clampPos, UI.makeDraggable
@@ -262,7 +268,7 @@ local function infoRow(page, labelText, value)
 end
 
 -- Toggle
--- opts.uiOnly = true → واجهة فقط. opts.default / opts.onChange للخيارات الحقيقية.
+-- Toggle helper for real settings only.
 local ToggleStates = {}
 local function newToggle(page, key, labelText, subText, opts)
     opts = opts or {}
@@ -340,12 +346,47 @@ end
 
 ---------------------------------------------------------------- Pages
 local pServer = newPage("Server", "🌐", "Server", "معلومات السيرفر الحالي وأدواته")
-local pCarry = newPage("Carry", "📦", "Auto Carry", "واجهة فقط — لا وظيفة مرتبطة")
-local pExit = newPage("Exit", "✅", "Auto Exit", "واجهة فقط — لا وظيفة مرتبطة")
-local pEsp = newPage("ESP", "👁", "Player ESP", "واجهة فقط — لا وظيفة مرتبطة")
+local pCarry = newPage("Carry", "📦", "Auto Carry", "حالة التوافق")
+local pExit = newPage("Exit", "✅", "Auto Exit", "أدوات مغادرة السيرفر")
+local pEsp = newPage("ESP", "👁", "Player ESP", "حالة التوافق")
 local pSettings = newPage("Settings", "⚙️", "Settings", "إعدادات SNOWY")
 
--- Server
+-- Helpers for real, local utility actions (no game exploits / no fake toggles)
+local function copyToClipboard(value)
+    local clipboard = setclipboard or toclipboard
+    if type(clipboard) ~= "function" then
+        notify("الحافظة غير مدعومة في بيئة التشغيل", true)
+        return false
+    end
+    local ok = pcall(clipboard, tostring(value))
+    if ok then
+        notify("تم النسخ إلى الحافظة")
+        return true
+    end
+    notify("تعذر النسخ إلى الحافظة", true)
+    return false
+end
+
+local function infoNote(page, message, order)
+    local box = Instance.new("Frame")
+    box.Size = UDim2.new(1, 0, 0, 66)
+    box.BackgroundColor3 = Theme.Item
+    box.BorderSizePixel = 0
+    box.LayoutOrder = order or 0
+    box.Parent = page
+    corner(box, 12)
+    stroke(box, Theme.Blue, 1, 0.55)
+    local txt = label(box, {
+        Text = message, Size = 12, Color = Theme.SubText,
+        Position = UDim2.new(0, 12, 0, 6),
+        SizeUDim = UDim2.new(1, -24, 1, -12),
+    })
+    txt.TextWrapped = true
+    txt.TextYAlignment = Enum.TextYAlignment.Center
+    return box
+end
+
+-- Server: real information about the current session only
 sectionLabel(pServer, "CURRENT SERVER", 1)
 local playersRow = infoRow(pServer, "Players", #Players:GetPlayers() .. " / " .. Players.MaxPlayers)
 playersRow.Parent.LayoutOrder = 2
@@ -353,9 +394,52 @@ local placeRow = infoRow(pServer, "Place ID", game.PlaceId)
 placeRow.Parent.LayoutOrder = 3
 local jobRow = infoRow(pServer, "Job ID", game.JobId ~= "" and game.JobId or "N/A")
 jobRow.Parent.LayoutOrder = 4
-sectionLabel(pServer, "TOOLS (UI ONLY)", 5)
-newToggle(pServer, "ServerFinder", "Server Finder", "UI only", { uiOnly = true }).LayoutOrder = 6
-newToggle(pServer, "ValueFinder", "Server Value Finder", "UI only", { uiOnly = true }).LayoutOrder = 7
+local serverAgeRow = infoRow(pServer, "Local session", "--")
+serverAgeRow.Parent.LayoutOrder = 5
+
+local function refreshServerInfo()
+    playersRow.Text = #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+    placeRow.Text = tostring(game.PlaceId)
+    jobRow.Text = game.JobId ~= "" and game.JobId or "N/A"
+    local seconds = math.max(0, math.floor(workspace.DistributedGameTime))
+    local minutes = math.floor(seconds / 60)
+    serverAgeRow.Text = string.format("%02d:%02d", math.floor(minutes / 60), minutes % 60)
+end
+
+local function serverSummary()
+    return table.concat({
+        "SNOWY Server Info",
+        "Place ID: " .. tostring(game.PlaceId),
+        "Job ID: " .. (game.JobId ~= "" and game.JobId or "N/A"),
+        "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers,
+        "Local session: " .. serverAgeRow.Text,
+    }, "\n")
+end
+
+sectionLabel(pServer, "SERVER TOOLS", 6)
+newButton(pServer, "Refresh Server Info", function()
+    refreshServerInfo()
+    notify("تم تحديث معلومات السيرفر")
+end).LayoutOrder = 7
+newButton(pServer, "Copy Server Info", function()
+    refreshServerInfo()
+    copyToClipboard(serverSummary())
+end).LayoutOrder = 8
+newButton(pServer, "Copy Job ID", function()
+    if game.JobId == "" then
+        notify("Job ID غير متاح في هذا المكان", true)
+    else
+        copyToClipboard(game.JobId)
+    end
+end).LayoutOrder = 9
+newButton(pServer, "Copy Place ID", function()
+    copyToClipboard(game.PlaceId)
+end).LayoutOrder = 10
+
+sectionLabel(pServer, "GAME DATA", 11)
+infoNote(pServer,
+    "Server Value Finder يحتاج بيانات يوفّرها مطوّر اللعبة بشكل مصرح. لا يمكن استنتاج قيم Brainrots الخاصة باللعبة من واجهة العميل وحدها.",
+    12)
 
 local function refreshPlayers()
     playersRow.Text = #Players:GetPlayers() .. " / " .. Players.MaxPlayers
@@ -363,10 +447,14 @@ end
 track(Players.PlayerAdded:Connect(refreshPlayers))
 track(Players.PlayerRemoving:Connect(function() task.defer(refreshPlayers) end))
 
--- Carry / Exit / ESP
-newToggle(pCarry, "AutoCarry", "Auto Carry", "UI only", { uiOnly = true })
-newToggle(pExit, "AutoExit", "Auto Exit — DONE", "UI only", { uiOnly = true })
-newToggle(pEsp, "PlayerESP", "Player ESP", "UI only", { uiOnly = true })
+-- Game-specific features use an explicit adapter contract. No fake toggles are shown.
+local adapterStatus = GameAdapter.getStatus(game.PlaceId)
+infoNote(pCarry,
+    "Auto Carry: " .. adapterStatus.message .. "\nهذه النسخة لا تتعرف تلقائياً على ميكانيكية الالتقاط في كل لعبة.", 1)
+infoNote(pExit,
+    "Auto Exit: غير متاح دون تكامل موثق للعبة يحدد نجاح الإيداع أو اكتمال المهمة. لن يغادر SNOWY السيرفر من تلقاء نفسه دون هذا التأكيد.", 1)
+infoNote(pEsp,
+    "Player ESP: غير مفعّل في الألعاب العامة. يمكن إضافة مؤشرات تشخيصية أو أدوات عرض ضمن تجربة تسمح بذلك عبر GameAdapter.", 1)
 
 -- Settings (وظائف حقيقية)
 sectionLabel(pSettings, "GENERAL", 1)
@@ -397,6 +485,7 @@ newButton(pSettings, "Unload SNOWY (يحذف الواجهة)", function(btn)
         return
     end
     for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+    for _, c in ipairs(uiConnections) do pcall(function() c:Disconnect() end) end
     gui:Destroy()
 end, Theme.Danger).LayoutOrder = 6
 
@@ -473,4 +562,5 @@ end))
 
 ---------------------------------------------------------------- Main (src/Main.lua)
 selectTab("Server")
-notify("SNOWY جاهز — الخيارات واجهة فقط", true)
+refreshServerInfo()
+notify("SNOWY جاهز — أدوات السيرفر المحلية متاحة", true)
