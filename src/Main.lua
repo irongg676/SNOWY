@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local LocalPlayer = Players.LocalPlayer
 
 ---------------------------------------------------------------- Remote module loader
@@ -25,6 +26,8 @@ local function loadRemoteModule(moduleName)
 end
 
 local Settings = loadRemoteModule("Settings")
+-- Main.lua-only patch version; no other project file needs to change.
+Settings.Version = "2.6.1"
 local Theme = loadRemoteModule("Theme")
 local GameAdapter = loadRemoteModule("GameAdapter")
 local UI = loadRemoteModule("UI")({
@@ -454,7 +457,7 @@ local gameDetected = adapterStatus.supported == true
 
 infoNote(pCarry,
     gameDetected
-        and "تم التعرف على Steal a Brainrot. نظام الالتقاط التلقائي لم يُفعّل بعد؛ هذه الحالة تؤكد توافق اللعبة فقط."
+        and "تم التعرف على Steal a Brainrot. يمكنك تشغيل مراقبة نافذة التفاعل لعرض اسم العنصر والإجراء عند ظهوره."
         or adapterStatus.message,
     1)
 infoNote(pExit,
@@ -468,15 +471,110 @@ infoNote(pEsp,
         or adapterStatus.message,
     1)
 
+-- Passive ProximityPrompt monitor. It observes prompts shown by Roblox but never activates them.
+local promptMonitorEnabled = false
+local visiblePrompts = {}
+local promptTargetRow = infoRow(pCarry, "العنصر", "لا يوجد")
+promptTargetRow.Parent.LayoutOrder = 5
+local promptActionRow = infoRow(pCarry, "الإجراء", "--")
+promptActionRow.Parent.LayoutOrder = 6
+local promptInputRow = infoRow(pCarry, "طريقة التفاعل", "--")
+promptInputRow.Parent.LayoutOrder = 7
+local promptStateRow = infoRow(pCarry, "الحالة", "المراقبة متوقفة")
+promptStateRow.Parent.LayoutOrder = 8
+
+local function getPromptName(prompt)
+    local objectText = ""
+    pcall(function() objectText = prompt.ObjectText end)
+    if type(objectText) == "string" and objectText ~= "" then
+        return objectText
+    end
+    local parent = prompt.Parent
+    if parent then return parent.Name end
+    return prompt.Name
+end
+
+local function getPromptAction(prompt)
+    local actionText = "تفاعل"
+    pcall(function()
+        if prompt.ActionText ~= "" then actionText = prompt.ActionText end
+    end)
+    return actionText
+end
+
+local function getInputName(inputType)
+    if inputType == nil then return "غير معروف" end
+    local value = tostring(inputType)
+    value = value:gsub("Enum%.ProximityPromptInputType%.", "")
+    if value == "Touch" then return "لمس / الجوال" end
+    if value == "Keyboard" then return "لوحة المفاتيح" end
+    if value == "Gamepad" then return "يد التحكم" end
+    return value
+end
+
+local function refreshPromptMonitor()
+    if not promptMonitorEnabled then
+        promptTargetRow.Text = "لا يوجد"
+        promptActionRow.Text = "--"
+        promptInputRow.Text = "--"
+        promptStateRow.Text = "المراقبة متوقفة"
+        return
+    end
+
+    local latestPrompt, latestData
+    for prompt, data in pairs(visiblePrompts) do
+        if prompt and prompt.Parent and prompt:IsDescendantOf(workspace) then
+            if not latestData or data.time > latestData.time then
+                latestPrompt, latestData = prompt, data
+            end
+        else
+            visiblePrompts[prompt] = nil
+        end
+    end
+
+    if not latestPrompt then
+        promptTargetRow.Text = "لا يوجد حالياً"
+        promptActionRow.Text = "--"
+        promptInputRow.Text = "--"
+        promptStateRow.Text = "انتظر ظهور نافذة التفاعل داخل اللعبة"
+        return
+    end
+
+    promptTargetRow.Text = getPromptName(latestPrompt)
+    promptActionRow.Text = getPromptAction(latestPrompt)
+    promptInputRow.Text = getInputName(latestData.inputType)
+    promptStateRow.Text = "نافذة التفاعل ظاهرة على الشاشة"
+end
+
+-- Keep a passive list of prompts Roblox reports as visible to this client.
+track(ProximityPromptService.PromptShown:Connect(function(prompt, inputType)
+    visiblePrompts[prompt] = { inputType = inputType, time = os.clock() }
+    refreshPromptMonitor()
+end))
+track(ProximityPromptService.PromptHidden:Connect(function(prompt)
+    visiblePrompts[prompt] = nil
+    refreshPromptMonitor()
+end))
+
+sectionLabel(pCarry, "PROMPT MONITOR", 2)
+newToggle(pCarry, "PromptMonitor", "مراقبة نافذة التفاعل", "عرض اسم العنصر والإجراء عند ظهور ProximityPrompt", {
+    default = false,
+    onChange = function(on)
+        promptMonitorEnabled = on
+        refreshPromptMonitor()
+        notify(on and "تم تشغيل مراقبة التفاعل" or "تم إيقاف مراقبة التفاعل")
+    end,
+}).LayoutOrder = 3
+
 -- Compatibility buttons report recognition of the target experience, not feature completion.
 newButton(pCarry, "Check Game Compatibility", function()
     local status = GameAdapter.getStatus(game.PlaceId, game.GameId)
-    notify(status.supported and status.message or status.message, not status.supported)
-end, Theme.Purple).LayoutOrder = 2
+    notify(status.message, not status.supported)
+end, Theme.Purple).LayoutOrder = 9
 
 newButton(pCarry, "Copy Game IDs", function()
     copyToClipboard("Universe ID: " .. tostring(game.GameId) .. "\nPlace ID: " .. tostring(game.PlaceId))
-end).LayoutOrder = 3
+end).LayoutOrder = 10
 
 newButton(pExit, "Check Game Compatibility", function()
     local status = GameAdapter.getStatus(game.PlaceId, game.GameId)
