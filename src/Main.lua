@@ -456,6 +456,34 @@ infoNote(pExit,
 infoNote(pEsp,
     "Player ESP: غير مفعّل في الألعاب العامة. يمكن إضافة مؤشرات تشخيصية أو أدوات عرض ضمن تجربة تسمح بذلك عبر GameAdapter.", 1)
 
+-- Visible, working controls: these report compatibility honestly instead of fake ON/OFF toggles.
+newButton(pCarry, "Check Carry Compatibility", function()
+    local status = GameAdapter.getStatus(game.PlaceId)
+    notify(status.supported and status.message or "Carry غير مدعوم لهذه اللعبة حالياً", not status.supported)
+end, Theme.Purple).LayoutOrder = 2
+
+newButton(pCarry, "Copy Game ID", function()
+    copyToClipboard(game.PlaceId)
+end).LayoutOrder = 3
+
+newButton(pExit, "Check Auto Exit Support", function()
+    local status = GameAdapter.getStatus(game.PlaceId)
+    if status.supported then
+        notify("التوافق متاح، لكن يلزم تحقق موثق من اكتمال المهمة قبل المغادرة")
+    else
+        notify("Auto Exit غير مدعوم لهذه اللعبة حالياً؛ لم يتم تأكيد إتمام أي مهمة", true)
+    end
+end, Theme.Purple).LayoutOrder = 2
+
+newButton(pExit, "Leave Server Now", function()
+    notify("المغادرة اليدوية غير متاحة من هذا الزر في هذه النسخة", true)
+end, Theme.Danger).LayoutOrder = 3
+
+newButton(pEsp, "Check ESP Compatibility", function()
+    local status = GameAdapter.getStatus(game.PlaceId)
+    notify(status.supported and status.message or "ESP غير مدعوم لهذه اللعبة حالياً", not status.supported)
+end, Theme.Purple).LayoutOrder = 2
+
 -- Settings (وظائف حقيقية)
 sectionLabel(pSettings, "GENERAL", 1)
 newToggle(pSettings, "Notifications", "Notifications", "تشغيل / إيقاف الإشعارات", {
