@@ -1,5 +1,5 @@
 --[[
-    SNOWY Bootstrap v2.4
+    SNOWY Bootstrap v2.5
     Place in the repository root and run this file only.
 ]]
 local BASE = "https://raw.githubusercontent.com/irongg676/SNOWY/main"

@@ -1,4 +1,4 @@
-# SNOWY ❄️ — Modular Universal Foundation v2.4
+# SNOWY ❄️ — Modular Universal Foundation v2.5
 
 هذه الحزمة تجعل واجهة SNOWY وأدوات الجلسة مستقلة عن لعبة معينة، وتضيف طبقة **GameAdapter** لتوصيل تكاملات خاصة بالألعاب عند توفر واجهات موثقة ومصرح بها. ليست كل ميكانيكيات Roblox موحدة؛ لذلك لا يمكن ضمان Auto Carry أو Auto Exit أو ESP أو Server Finder في كل لعبة بمجرد تشغيل ملف واحد.
 
@@ -39,3 +39,4 @@ SNOWY/
 
 ## الاختبار
 لم يتم اختبار هذه الحزمة داخل Delta أو على جهاز Android. دعم `loadstring` وطلبات HTTP والحافظة يختلف حسب بيئة التنفيذ.
+\n\n## v2.5 UI update\n\nAdded visible action buttons to Carry, Exit, and ESP pages. These buttons perform compatibility checks and report unsupported integrations; they do not pretend that game-specific automation is active.\n
